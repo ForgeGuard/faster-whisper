@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+  faster-whisper-api:
+    image: ghcr.io/systran/faster-whisper:latest
+    container_name: faster-whisper-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      MODEL_SIZE: large-v3
+      DEVICE: cuda
+      COMPUTE_TYPE: float16
+      BEAM_SIZE: "5"
+      ENABLE_VAD_FILTER: "true"
+      DEFAULT_LANGUAGE: ""
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    volumes:
+      - faster-whisper-cache:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  faster-whisper-cache:

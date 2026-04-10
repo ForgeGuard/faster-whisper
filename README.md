@@ -1,25 +1,279 @@
-[![CI](https://github.com/SYSTRAN/faster-whisper/workflows/CI/badge.svg)](https://github.com/SYSTRAN/faster-whisper/actions?query=workflow%3ACI) [![PyPI version](https://badge.fury.io/py/faster-whisper.svg)](https://badge.fury.io/py/faster-whisper)
+[![CI](https://github.com/SYSTRAN/faster-whisper/workflows/CI/badge.svg)](https://github.com/SYSTRAN/faster-whisper/actions?query=workflow%3ACI)
+[![PyPI version](https://badge.fury.io/py/faster-whisper.svg)](https://badge.fury.io/py/faster-whisper)
 
 # Faster Whisper transcription with CTranslate2
 
-**faster-whisper** is a reimplementation of OpenAI's Whisper model using [CTranslate2](https://github.com/OpenNMT/CTranslate2/), which is a fast inference engine for Transformer models.
+**faster-whisper** is a reimplementation of OpenAI's Whisper model using [CTranslate2](https://github.com/OpenNMT/CTranslate2/), a fast inference engine for Transformer models.
 
-This implementation is up to 4 times faster than [openai/whisper](https://github.com/openai/whisper) for the same accuracy while using less memory. The efficiency can be further improved with 8-bit quantization on both CPU and GPU.
+This implementation is up to 4x faster than [openai/whisper](https://github.com/openai/whisper) for similar accuracy while using less memory. Efficiency can be improved further with 8-bit quantization on CPU and GPU.
 
-## Benchmark
+## Table of contents
 
-### Whisper
+- [Quick start (Python)](#quick-start-python)
+- [Containerized OpenAI-compatible API (recommended)](#containerized-openai-compatible-api-recommended)
+- [Portainer / docker-compose stack (ready to run)](#portainer--docker-compose-stack-ready-to-run)
+- [Open WebUI integration](#open-webui-integration)
+- [Requirements and compatibility](#requirements-and-compatibility)
+- [Usage (Python API)](#usage-python-api)
+- [Benchmarks](#benchmarks)
+- [Model conversion](#model-conversion)
+- [Comparing performance fairly](#comparing-performance-fairly)
+- [Community integrations](#community-integrations)
 
-For reference, here's the time and memory usage that are required to transcribe [**13 minutes**](https://www.youtube.com/watch?v=0u7tTptBo9I) of audio using different implementations:
+## Quick start (Python)
 
-* [openai/whisper](https://github.com/openai/whisper)@[v20240930](https://github.com/openai/whisper/tree/v20240930)
-* [whisper.cpp](https://github.com/ggerganov/whisper.cpp)@[v1.7.2](https://github.com/ggerganov/whisper.cpp/tree/v1.7.2)
-* [transformers](https://github.com/huggingface/transformers)@[v4.46.3](https://github.com/huggingface/transformers/tree/v4.46.3)
-* [faster-whisper](https://github.com/SYSTRAN/faster-whisper)@[v1.1.0](https://github.com/SYSTRAN/faster-whisper/tree/v1.1.0)
+Install from [PyPI](https://pypi.org/project/faster-whisper/):
+
+```bash
+pip install faster-whisper
+```
+
+Minimal example:
+
+```python
+from faster_whisper import WhisperModel
+
+model = WhisperModel("large-v3", device="cuda", compute_type="float16")
+segments, info = model.transcribe("audio.mp3", beam_size=5)
+
+print(f"Detected language: {info.language} ({info.language_probability:.3f})")
+for segment in segments:
+    print(f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}")
+```
+
+`segments` is a generator, so transcription starts when you iterate over it:
+
+```python
+segments, _ = model.transcribe("audio.mp3")
+segments = list(segments)
+```
+
+<details>
+<summary>Other installation methods</summary>
+
+Install the `master` branch:
+
+```bash
+pip install --force-reinstall "faster-whisper @ https://github.com/SYSTRAN/faster-whisper/archive/refs/heads/master.tar.gz"
+```
+
+Install a specific commit:
+
+```bash
+pip install --force-reinstall "faster-whisper @ https://github.com/SYSTRAN/faster-whisper/archive/a4f1cc8f11433e454c3934442b5e1a4ed5e865c3.tar.gz"
+```
+
+</details>
+
+## Containerized OpenAI-compatible API (recommended)
+
+This repository now includes a long-running API server for OpenAI-compatible audio transcription in:
+
+- [`docker/api_server.py`](docker/api_server.py)
+- [`docker/Dockerfile`](docker/Dockerfile)
+
+### Build locally
+
+```bash
+docker build -t faster-whisper:local -f docker/Dockerfile .
+```
+
+### Run locally (GPU)
+
+```bash
+docker run --rm -it \
+  --gpus all \
+  -p 8000:8000 \
+  -e MODEL_SIZE=large-v3 \
+  -e DEVICE=cuda \
+  -e COMPUTE_TYPE=float16 \
+  -e BEAM_SIZE=5 \
+  -e ENABLE_VAD_FILTER=true \
+  faster-whisper:local
+```
+
+### Endpoint
+
+- `POST /v1/audio/transcriptions` (OpenAI-compatible form upload)
+- `GET /healthz`
+
+Example request:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/v1/audio/transcriptions" \
+  -F "file=@sample.wav" \
+  -F "model=whisper-1" \
+  -F "response_format=json"
+```
+
+## Portainer / docker-compose stack (ready to run)
+
+Reference file: [`deploy/docker-compose.portainer.yml`](deploy/docker-compose.portainer.yml)
+
+Use this stack in Portainer or with `docker compose`:
+
+```yaml
+version: "3.9"
+
+services:
+  faster-whisper-api:
+    image: ghcr.io/systran/faster-whisper:latest
+    container_name: faster-whisper-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      MODEL_SIZE: large-v3
+      DEVICE: cuda
+      COMPUTE_TYPE: float16
+      BEAM_SIZE: "5"
+      ENABLE_VAD_FILTER: "true"
+      DEFAULT_LANGUAGE: ""
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    volumes:
+      - faster-whisper-cache:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  faster-whisper-cache:
+```
+
+Notes:
+- The compose file uses GHCR images produced by GitHub Actions.
+- The cache volume avoids repeated model downloads.
+- In vanilla Docker Compose environments, `deploy.*` may be ignored; in Portainer/Swarm it is used for GPU reservations.
+
+## Open WebUI integration
+
+This API is intended to be consumed by OpenAI-compatible clients such as Open WebUI.
+
+Typical integration values:
+- Base URL: `http://<your-host>:8000/v1`
+- Endpoint used for speech transcription: `/audio/transcriptions`
+- Model value: `whisper-1` (accepted for compatibility; actual runtime model is selected via `MODEL_SIZE`)
+
+## Requirements and compatibility
+
+- Python 3.9+
+- For GPU execution: NVIDIA driver + CUDA runtime compatibility on host
+- `ctranslate2` current versions target CUDA 12 + cuDNN 9
+
+### Recommended container runtime baseline
+
+The Docker image uses:
+
+- `nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04`
+
+Why:
+- CUDA 12.8 adds Blackwell tooling support (relevant for RTX 50-series).
+- Ampere-class GPUs such as NVIDIA A2 remain supported on CUDA 12.x.
+
+### Compatibility checklist
+
+1. Install a host NVIDIA driver that supports CUDA 12.8 containers.
+2. Install/configure NVIDIA Container Toolkit (`--gpus all` works).
+3. Confirm GPU visibility:
+
+```bash
+docker run --rm --gpus all nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04 nvidia-smi
+```
+
+### Alternative GPU library install (non-Docker Linux)
+
+If running outside Docker, you can install CUDA 12 user-space libraries with pip:
+
+```bash
+pip install nvidia-cublas-cu12 nvidia-cudnn-cu12==9.*
+export LD_LIBRARY_PATH=$(python3 -c 'import os; import nvidia.cublas.lib; import nvidia.cudnn.lib; print(os.path.dirname(nvidia.cublas.lib.__file__) + ":" + os.path.dirname(nvidia.cudnn.lib.__file__))')
+```
+
+## Usage (Python API)
+
+### Batched transcription
+
+```python
+from faster_whisper import BatchedInferencePipeline, WhisperModel
+
+model = WhisperModel("turbo", device="cuda", compute_type="float16")
+batched_model = BatchedInferencePipeline(model=model)
+segments, info = batched_model.transcribe("audio.mp3", batch_size=16)
+
+for segment in segments:
+    print(f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}")
+```
+
+### Distil-Whisper
+
+```python
+from faster_whisper import WhisperModel
+
+model = WhisperModel("distil-large-v3", device="cuda", compute_type="float16")
+segments, info = model.transcribe(
+    "audio.mp3",
+    beam_size=5,
+    language="en",
+    condition_on_previous_text=False,
+)
+```
+
+See the [distil-large-v3 model card](https://huggingface.co/distil-whisper/distil-large-v3).
+
+### Word-level timestamps
+
+```python
+segments, _ = model.transcribe("audio.mp3", word_timestamps=True)
+for segment in segments:
+    for word in segment.words:
+        print(f"[{word.start:.2f}s -> {word.end:.2f}s] {word.word}")
+```
+
+### VAD filter
+
+```python
+segments, _ = model.transcribe("audio.mp3", vad_filter=True)
+segments, _ = model.transcribe(
+    "audio.mp3",
+    vad_filter=True,
+    vad_parameters=dict(min_silence_duration_ms=500),
+)
+```
+
+VAD filter is enabled by default for batched transcription.
+
+### Logging
+
+```python
+import logging
+
+logging.basicConfig()
+logging.getLogger("faster_whisper").setLevel(logging.DEBUG)
+```
+
+See additional options in [`WhisperModel`](faster_whisper/transcribe.py).
+
+## Benchmarks
+
+Reference setup for transcribing [13 minutes](https://www.youtube.com/watch?v=0u7tTptBo9I) of audio:
+
+- [openai/whisper](https://github.com/openai/whisper)@[v20240930](https://github.com/openai/whisper/tree/v20240930)
+- [whisper.cpp](https://github.com/ggerganov/whisper.cpp)@[v1.7.2](https://github.com/ggerganov/whisper.cpp/tree/v1.7.2)
+- [transformers](https://github.com/huggingface/transformers)@[v4.46.3](https://github.com/huggingface/transformers/tree/v4.46.3)
+- [faster-whisper](https://github.com/SYSTRAN/faster-whisper)@[v1.1.0](https://github.com/SYSTRAN/faster-whisper/tree/v1.1.0)
 
 ### Large-v2 model on GPU
 
-| Implementation | Precision | Beam size | Time | VRAM Usage |
+| Implementation | Precision | Beam size | Time | VRAM usage |
 | --- | --- | --- | --- | --- |
 | openai/whisper | fp16 | 5 | 2m23s | 4708MB |
 | whisper.cpp (Flash Attention) | fp16 | 5 | 1m05s | 4127MB |
@@ -36,12 +290,11 @@ For reference, here's the time and memory usage that are required to transcribe 
 | transformers (SDPA) (`batch_size=16`) | fp16 | 5 | 46m12s | 14.801 |
 | faster-whisper (`batch_size=16`) | fp16 | 5 | 25m50s | 13.527 |
 
-*GPU Benchmarks are Executed with CUDA 12.4 on a NVIDIA RTX 3070 Ti 8GB.*
-[^1]: transformers OOM for any batch size > 1
+GPU benchmarks were executed with CUDA 12.4 on an NVIDIA RTX 3070 Ti 8GB.
 
 ### Small model on CPU
 
-| Implementation | Precision | Beam size | Time | RAM Usage |
+| Implementation | Precision | Beam size | Time | RAM usage |
 | --- | --- | --- | --- | --- |
 | openai/whisper | fp32 | 5 | 6m58s | 2335MB |
 | whisper.cpp | fp32 | 5 | 2m05s | 1049MB |
@@ -51,247 +304,66 @@ For reference, here's the time and memory usage that are required to transcribe 
 | faster-whisper | int8 | 5 | 1m42s | 1477MB |
 | faster-whisper (`batch_size=8`) | int8 | 5 | 51s | 3608MB |
 
-*Executed with 8 threads on an Intel Core i7-12700K.*
+Executed with 8 threads on an Intel Core i7-12700K.
 
-
-## Requirements
-
-* Python 3.9 or greater
-
-Unlike openai-whisper, FFmpeg does **not** need to be installed on the system. The audio is decoded with the Python library [PyAV](https://github.com/PyAV-Org/PyAV) which bundles the FFmpeg libraries in its package.
-
-### GPU
-
-GPU execution requires the following NVIDIA libraries to be installed:
-
-* [cuBLAS for CUDA 12](https://developer.nvidia.com/cublas)
-* [cuDNN 9 for CUDA 12](https://developer.nvidia.com/cudnn)
-
-**Note**: The latest versions of `ctranslate2` only support CUDA 12 and cuDNN 9. For CUDA 11 and cuDNN 8, the current workaround is downgrading to the `3.24.0` version of `ctranslate2`, for CUDA 12 and cuDNN 8, downgrade to the `4.4.0` version of `ctranslate2`, (This can be done with `pip install --force-reinstall ctranslate2==4.4.0` or specifying the version in a `requirements.txt`).
-
-There are multiple ways to install the NVIDIA libraries mentioned above. The recommended way is described in the official NVIDIA documentation, but we also suggest other installation methods below. 
-
-<details>
-<summary>Other installation methods (click to expand)</summary>
-
-
-**Note:** For all these methods below, keep in mind the above note regarding CUDA versions. Depending on your setup, you may need to install the _CUDA 11_ versions of libraries that correspond to the CUDA 12 libraries listed in the instructions below.
-
-#### Use Docker
-
-The libraries (cuBLAS, cuDNN) are installed in this official NVIDIA CUDA Docker images: `nvidia/cuda:12.3.2-cudnn9-runtime-ubuntu22.04`.
-
-#### Install with `pip` (Linux only)
-
-On Linux these libraries can be installed with `pip`. Note that `LD_LIBRARY_PATH` must be set before launching Python.
-
-```bash
-pip install nvidia-cublas-cu12 nvidia-cudnn-cu12==9.*
-
-export LD_LIBRARY_PATH=`python3 -c 'import os; import nvidia.cublas.lib; import nvidia.cudnn.lib; print(os.path.dirname(nvidia.cublas.lib.__file__) + ":" + os.path.dirname(nvidia.cudnn.lib.__file__))'`
-```
-
-#### Download the libraries from Purfview's repository (Windows & Linux)
-
-Purfview's [whisper-standalone-win](https://github.com/Purfview/whisper-standalone-win) provides the required NVIDIA libraries for Windows & Linux in a [single archive](https://github.com/Purfview/whisper-standalone-win/releases/tag/libs). Decompress the archive and place the libraries in a directory included in the `PATH`.
-
-</details>
-
-## Installation
-
-The module can be installed from [PyPI](https://pypi.org/project/faster-whisper/):
-
-```bash
-pip install faster-whisper
-```
-
-<details>
-<summary>Other installation methods (click to expand)</summary>
-
-### Install the master branch
-
-```bash
-pip install --force-reinstall "faster-whisper @ https://github.com/SYSTRAN/faster-whisper/archive/refs/heads/master.tar.gz"
-```
-
-### Install a specific commit
-
-```bash
-pip install --force-reinstall "faster-whisper @ https://github.com/SYSTRAN/faster-whisper/archive/a4f1cc8f11433e454c3934442b5e1a4ed5e865c3.tar.gz"
-```
-
-</details>
-
-## Usage
-
-### Faster-whisper
-
-```python
-from faster_whisper import WhisperModel
-
-model_size = "large-v3"
-
-# Run on GPU with FP16
-model = WhisperModel(model_size, device="cuda", compute_type="float16")
-
-# or run on GPU with INT8
-# model = WhisperModel(model_size, device="cuda", compute_type="int8_float16")
-# or run on CPU with INT8
-# model = WhisperModel(model_size, device="cpu", compute_type="int8")
-
-segments, info = model.transcribe("audio.mp3", beam_size=5)
-
-print("Detected language '%s' with probability %f" % (info.language, info.language_probability))
-
-for segment in segments:
-    print("[%.2fs -> %.2fs] %s" % (segment.start, segment.end, segment.text))
-```
-
-**Warning:** `segments` is a *generator* so the transcription only starts when you iterate over it. The transcription can be run to completion by gathering the segments in a list or a `for` loop:
-
-```python
-segments, _ = model.transcribe("audio.mp3")
-segments = list(segments)  # The transcription will actually run here.
-```
-
-### Batched Transcription
-The following code snippet illustrates how to run batched transcription on an example audio file. `BatchedInferencePipeline.transcribe` is a drop-in replacement for `WhisperModel.transcribe`
-
-```python
-from faster_whisper import WhisperModel, BatchedInferencePipeline
-
-model = WhisperModel("turbo", device="cuda", compute_type="float16")
-batched_model = BatchedInferencePipeline(model=model)
-segments, info = batched_model.transcribe("audio.mp3", batch_size=16)
-
-for segment in segments:
-    print("[%.2fs -> %.2fs] %s" % (segment.start, segment.end, segment.text))
-```
-
-### Faster Distil-Whisper
-
-The Distil-Whisper checkpoints are compatible with the Faster-Whisper package. In particular, the latest [distil-large-v3](https://huggingface.co/distil-whisper/distil-large-v3)
-checkpoint is intrinsically designed to work with the Faster-Whisper transcription algorithm. The following code snippet 
-demonstrates how to run inference with distil-large-v3 on a specified audio file:
-
-```python
-from faster_whisper import WhisperModel
-
-model_size = "distil-large-v3"
-
-model = WhisperModel(model_size, device="cuda", compute_type="float16")
-segments, info = model.transcribe("audio.mp3", beam_size=5, language="en", condition_on_previous_text=False)
-
-for segment in segments:
-    print("[%.2fs -> %.2fs] %s" % (segment.start, segment.end, segment.text))
-```
-
-For more information about the distil-large-v3 model, refer to the original [model card](https://huggingface.co/distil-whisper/distil-large-v3).
-
-### Word-level timestamps
-
-```python
-segments, _ = model.transcribe("audio.mp3", word_timestamps=True)
-
-for segment in segments:
-    for word in segment.words:
-        print("[%.2fs -> %.2fs] %s" % (word.start, word.end, word.word))
-```
-
-### VAD filter
-
-The library integrates the [Silero VAD](https://github.com/snakers4/silero-vad) model to filter out parts of the audio without speech:
-
-```python
-segments, _ = model.transcribe("audio.mp3", vad_filter=True)
-```
-
-The default behavior is conservative and only removes silence longer than 2 seconds. See the available VAD parameters and default values in the [source code](https://github.com/SYSTRAN/faster-whisper/blob/master/faster_whisper/vad.py). They can be customized with the dictionary argument `vad_parameters`:
-
-```python
-segments, _ = model.transcribe(
-    "audio.mp3",
-    vad_filter=True,
-    vad_parameters=dict(min_silence_duration_ms=500),
-)
-```
-Vad filter is enabled by default for batched transcription.
-
-### Logging
-
-The library logging level can be configured like this:
-
-```python
-import logging
-
-logging.basicConfig()
-logging.getLogger("faster_whisper").setLevel(logging.DEBUG)
-```
-
-### Going further
-
-See more model and transcription options in the [`WhisperModel`](https://github.com/SYSTRAN/faster-whisper/blob/master/faster_whisper/transcribe.py) class implementation.
-
-## Community integrations
-
-Here is a non exhaustive list of open-source projects using faster-whisper. Feel free to add your project to the list!
-
-
-* [speaches](https://github.com/speaches-ai/speaches) is an OpenAI compatible server using `faster-whisper`. It's easily deployable with Docker, works with OpenAI SDKs/CLI, supports streaming, and live transcription.
-* [WhisperX](https://github.com/m-bain/whisperX) is an award-winning Python library that offers speaker diarization and accurate word-level timestamps using wav2vec2 alignment
-* [whisper-ctranslate2](https://github.com/Softcatala/whisper-ctranslate2) is a command line client based on faster-whisper and compatible with the original client from openai/whisper.
-* [whisper-diarize](https://github.com/MahmoudAshraf97/whisper-diarization) is a speaker diarization tool that is based on faster-whisper and NVIDIA NeMo.
-* [whisper-standalone-win](https://github.com/Purfview/whisper-standalone-win) Standalone CLI executables of faster-whisper for Windows, Linux & macOS. 
-* [asr-sd-pipeline](https://github.com/hedrergudene/asr-sd-pipeline) provides a scalable, modular, end to end multi-speaker speech to text solution implemented using AzureML pipelines.
-* [Open-Lyrics](https://github.com/zh-plus/Open-Lyrics) is a Python library that transcribes voice files using faster-whisper, and translates/polishes the resulting text into `.lrc` files in the desired language using OpenAI-GPT.
-* [wscribe](https://github.com/geekodour/wscribe) is a flexible transcript generation tool supporting faster-whisper, it can export word level transcript and the exported transcript then can be edited with [wscribe-editor](https://github.com/geekodour/wscribe-editor)
-* [aTrain](https://github.com/BANDAS-Center/aTrain) is a graphical user interface implementation of faster-whisper developed at the BANDAS-Center at the University of Graz for transcription and diarization in Windows ([Windows Store App](https://apps.microsoft.com/detail/atrain/9N15Q44SZNS2)) and Linux.
-* [Whisper-Streaming](https://github.com/ufal/whisper_streaming) implements real-time mode for offline Whisper-like speech-to-text models with faster-whisper as the most recommended back-end. It implements a streaming policy with self-adaptive latency based on the actual source complexity, and demonstrates the state of the art.
-* [WhisperLive](https://github.com/collabora/WhisperLive) is a nearly-live implementation of OpenAI's Whisper which uses faster-whisper as the backend to transcribe audio in real-time.
-* [Faster-Whisper-Transcriber](https://github.com/BBC-Esq/ctranslate2-faster-whisper-transcriber) is a simple but reliable voice transcriber that provides a user-friendly interface.
-* [Open-dubbing](https://github.com/softcatala/open-dubbing) is open dubbing is an AI dubbing system which uses machine learning models to automatically translate and synchronize audio dialogue into different languages.
-* [Whisper-FastAPI](https://github.com/heimoshuiyu/whisper-fastapi) whisper-fastapi is a very simple script that provides an API backend compatible with OpenAI, HomeAssistant, and Konele (Android voice typing) formats.
+[^1]: `transformers` OOM for any batch size > 1 in this benchmark setup.
 
 ## Model conversion
 
-When loading a model from its size such as `WhisperModel("large-v3")`, the corresponding CTranslate2 model is automatically downloaded from the [Hugging Face Hub](https://huggingface.co/Systran).
+When loading a model by size (for example `WhisperModel("large-v3")`), the corresponding CTranslate2 model is automatically downloaded from the [Hugging Face Hub](https://huggingface.co/Systran).
 
-We also provide a script to convert any Whisper models compatible with the Transformers library. They could be the original OpenAI models or user fine-tuned models.
-
-For example the command below converts the [original "large-v3" Whisper model](https://huggingface.co/openai/whisper-large-v3) and saves the weights in FP16:
+To convert Whisper models compatible with Transformers:
 
 ```bash
-pip install transformers[torch]>=4.23
-
-ct2-transformers-converter --model openai/whisper-large-v3 --output_dir whisper-large-v3-ct2
---copy_files tokenizer.json preprocessor_config.json --quantization float16
+pip install "transformers[torch]>=4.23"
+ct2-transformers-converter \
+  --model openai/whisper-large-v3 \
+  --output_dir whisper-large-v3-ct2 \
+  --copy_files tokenizer.json preprocessor_config.json \
+  --quantization float16
 ```
 
-* The option `--model` accepts a model name on the Hub or a path to a model directory.
-* If the option `--copy_files tokenizer.json` is not used, the tokenizer configuration is automatically downloaded when the model is loaded later.
-
-Models can also be converted from the code. See the [conversion API](https://opennmt.net/CTranslate2/python/ctranslate2.converters.TransformersConverter.html).
+- `--model` accepts a model name from the Hub or a local path.
+- If you skip `--copy_files tokenizer.json`, tokenizer config is downloaded at load time.
+- See also the [conversion API](https://opennmt.net/CTranslate2/python/ctranslate2.converters.TransformersConverter.html).
 
 ### Load a converted model
 
-1. Directly load the model from a local directory:
 ```python
-model = faster_whisper.WhisperModel("whisper-large-v3-ct2")
+from faster_whisper import WhisperModel
+
+local_model = WhisperModel("whisper-large-v3-ct2")
+hub_model = WhisperModel("username/whisper-large-v3-ct2")
 ```
 
-2. [Upload your model to the Hugging Face Hub](https://huggingface.co/docs/transformers/model_sharing#upload-with-the-web-interface) and load it from its name:
-```python
-model = faster_whisper.WhisperModel("username/whisper-large-v3-ct2")
-```
+## Comparing performance fairly
 
-## Comparing performance against other implementations
+When comparing against other Whisper implementations:
 
-If you are comparing the performance against other Whisper implementations, you should make sure to run the comparison with similar settings. In particular:
-
-* Verify that the same transcription options are used, especially the same beam size. For example in openai/whisper, `model.transcribe` uses a default beam size of 1 but here we use a default beam size of 5.
-* Transcription speed is closely affected by the number of words in the transcript, so ensure that other implementations have a similar WER (Word Error Rate) to this one.
-* When running on CPU, make sure to set the same number of threads. Many frameworks will read the environment variable `OMP_NUM_THREADS`, which can be set when running your script:
+- Use equivalent transcription settings (especially beam size).
+- Compare systems at similar WER.
+- On CPU, set equivalent thread counts:
 
 ```bash
 OMP_NUM_THREADS=4 python3 my_script.py
 ```
+
+## Community integrations
+
+Examples of open-source projects using faster-whisper:
+
+- [speaches](https://github.com/speaches-ai/speaches): OpenAI-compatible server based on `faster-whisper`.
+- [WhisperX](https://github.com/m-bain/whisperX): diarization + accurate word-level timestamps.
+- [whisper-ctranslate2](https://github.com/Softcatala/whisper-ctranslate2): CLI compatible with `openai/whisper`.
+- [whisper-diarize](https://github.com/MahmoudAshraf97/whisper-diarization): diarization pipeline with NVIDIA NeMo.
+- [whisper-standalone-win](https://github.com/Purfview/whisper-standalone-win): standalone binaries for Windows/Linux/macOS.
+- [asr-sd-pipeline](https://github.com/hedrergudene/asr-sd-pipeline): scalable multi-speaker speech-to-text pipeline.
+- [Open-Lyrics](https://github.com/zh-plus/Open-Lyrics): transcript and lyrics generation workflow.
+- [wscribe](https://github.com/geekodour/wscribe): transcript generation and editor workflow.
+- [aTrain](https://github.com/BANDAS-Center/aTrain): GUI-based transcription and diarization app.
+- [Whisper-Streaming](https://github.com/ufal/whisper_streaming): near real-time streaming mode.
+- [WhisperLive](https://github.com/collabora/WhisperLive): nearly-live transcription backend.
+
+## Future work
+
+Helm chart packaging and a dedicated Helm-focused GitHub Actions workflow are intentionally left for a later phase.
