@@ -464,10 +464,10 @@ docker build -t faster-whisper-api:local -f docker/Dockerfile .
 ghcr.io/${{ github.repository }}
 ```
 
-For any fork, replace `<owner-or-org>` with the lowercased GitHub account that owns the repository:
+For any fork, replace `your-github-owner` with the lowercased GitHub username or organization that owns the repository:
 
 ```text
-ghcr.io/<owner-or-org>/faster-whisper:latest
+ghcr.io/your-github-owner/faster-whisper:latest
 ```
 
 Published tags include:
@@ -486,8 +486,8 @@ version: "3.9"
 
 services:
   faster-whisper-api:
-    # Replace <owner-or-org> with the lowercased GitHub owner or organization.
-    image: ghcr.io/<owner-or-org>/faster-whisper:latest
+    # Replace your-github-owner with the lowercased GitHub username or organization.
+    image: ghcr.io/your-github-owner/faster-whisper:latest
     container_name: faster-whisper-api
     restart: unless-stopped
     ports:
@@ -625,7 +625,7 @@ ct2-transformers-converter \
 ```
 
 - `--model` accepts a Hugging Face model name or local model directory.
-- `--copy_files tokenizer.json preprocessor_config.json` copies both tokenizer and preprocessing metadata into the converted model directory.
+- `--copy_files` copies each listed metadata file into the converted model directory.
 - If tokenizer files are not copied, the tokenizer configuration is downloaded when the model is loaded later.
 - See the [CTranslate2 conversion API](https://opennmt.net/CTranslate2/python/ctranslate2.converters.TransformersConverter.html) for programmatic conversion.
 
