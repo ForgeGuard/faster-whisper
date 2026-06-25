@@ -88,6 +88,7 @@ docker run --rm -it \
   -e COMPUTE_TYPE=float16 \
   -e BEAM_SIZE=5 \
   -e ENABLE_VAD_FILTER=true \
+  -e API_KEY= \
   faster-whisper-api:local
 ```
 
@@ -389,6 +390,9 @@ Environment variables are read at process startup:
 | `BEAM_SIZE` | `5` | Beam size used for every API transcription request. |
 | `DEFAULT_LANGUAGE` | unset | Optional default language when the request omits `language`. |
 | `ENABLE_VAD_FILTER` | `true` | Enables VAD for API requests when set to `1`, `true`, `yes`, or `on`. |
+| `API_KEY` | unset | Optional bearer token required for transcription requests when set. |
+
+Authentication is disabled by default. To require OpenAI-compatible bearer token authentication for transcription requests, set `API_KEY` to a non-empty value and send that value as a bearer token in the `Authorization` header. The `/healthz` endpoint always remains unauthenticated for container health checks.
 
 ### Request form fields
 
@@ -504,6 +508,7 @@ services:
       BEAM_SIZE: "5"
       ENABLE_VAD_FILTER: "true"
       DEFAULT_LANGUAGE: ""
+      API_KEY: ""
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
       interval: 30s
@@ -530,6 +535,7 @@ Notes:
 - The cache volume avoids repeated model downloads.
 - `deploy.resources.reservations.devices` is used by Swarm/Portainer-style deployments. Some plain Docker Compose setups may ignore `deploy.*`; use `docker run --gpus all` or Compose GPU support appropriate for your environment.
 - For CPU deployments, set `DEVICE=cpu`, choose `COMPUTE_TYPE=int8`, and use a smaller model such as `tiny`, `base`, or `small` unless you have substantial CPU/RAM capacity.
+- Leave `API_KEY` empty to keep the API unauthenticated, or set it to require a matching bearer token on transcription requests. `/healthz` does not require authentication.
 
 ### Open WebUI integration
 
@@ -541,7 +547,7 @@ Use the API as an OpenAI-compatible audio transcription backend:
 | Transcription endpoint | `/audio/transcriptions` |
 | Model value | `whisper-1` |
 | Actual model selection | `MODEL_SIZE` environment variable |
-| API key | Any placeholder if the client requires one; this server does not validate API keys. |
+| API key | Any placeholder when `API_KEY` is unset; otherwise use the configured `API_KEY` value. |
 
 ## Benchmarks
 

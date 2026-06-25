@@ -36,6 +36,7 @@ jobs:
           docker run -d --name faster-whisper-smoke \
             -e DEVICE=cpu \
             -e MODEL_SIZE=tiny \
+            -e API_KEY=smoke-test-key \
             -p 8000:8000 \
             faster-whisper:ci-smoke
 
@@ -52,6 +53,52 @@ jobs:
           done
 
           curl -fsS http://127.0.0.1:8000/healthz
+
+          status=$(curl -sS -o /dev/null -w "%{http_code}" \
+            -X POST http://127.0.0.1:8000/v1/audio/transcriptions)
+          if [ "$status" != "401" ]; then
+            echo "Expected unauthenticated transcription request to return 401, got $status"
+            docker logs faster-whisper-smoke
+            exit 1
+          fi
+
+          status=$(curl -sS -o /dev/null -w "%{http_code}" \
+            -X POST http://127.0.0.1:8000/v1/audio/transcriptions \
+            -H "Authorization: Bearer smoke-test-key")
+          if [ "$status" != "422" ]; then
+            echo "Expected authenticated transcription request without file to return 422, got $status"
+            docker logs faster-whisper-smoke
+            exit 1
+          fi
+
+          docker rm -f faster-whisper-smoke
+
+          docker run -d --name faster-whisper-smoke \
+            -e DEVICE=cpu \
+            -e MODEL_SIZE=tiny \
+            -p 8000:8000 \
+            faster-whisper:ci-smoke
+
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/healthz > /dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo "Unauthenticated health check failed"
+              docker logs faster-whisper-smoke
+              exit 1
+            fi
+            sleep 2
+          done
+
+          status=$(curl -sS -o /dev/null -w "%{http_code}" \
+            -X POST http://127.0.0.1:8000/v1/audio/transcriptions)
+          if [ "$status" != "422" ]; then
+            echo "Expected default transcription request without file to return 422, got $status"
+            docker logs faster-whisper-smoke
+            exit 1
+          fi
+
           docker rm -f faster-whisper-smoke
 
   build-and-push-ghcr:
