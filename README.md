@@ -398,7 +398,7 @@ Environment variables are read at process startup:
 | `model` | `whisper-1` | accepted for compatibility | Ignored by the server; use `MODEL_SIZE` to select the actual runtime model. |
 | `language` | `DEFAULT_LANGUAGE` or auto-detect | supported | Optional language code. |
 | `prompt` | unset | supported | Passed as `initial_prompt`. |
-| `response_format` | `json` | supported values: `json`, `verbose_json`, `text` | Controls response shape. `text` currently returns a JSON object containing `text`. |
+| `response_format` | `json` | supported values: `json`, `verbose_json`, `text` | Controls response shape. Unlike the OpenAI API, `text` currently returns a JSON object containing `text` rather than `text/plain`. |
 | `temperature` | `0.0` | accepted, currently ignored | Present for OpenAI client compatibility. |
 | `timestamp_granularities` | unset | partially supported | `word` enables word timestamp computation internally, but the current API response includes segment timings only. Use the Python API for word arrays. |
 
@@ -582,7 +582,7 @@ GPU benchmarks were executed with CUDA 12.4 on an NVIDIA RTX 3070 Ti 8GB.
 
 Executed with 8 threads on an Intel Core i7-12700K.
 
-[^1]: `transformers` was out of memory for any batch size greater than 1 in this benchmark setup.
+[^1]: `transformers` ran out of memory for any batch size greater than 1 in this benchmark setup.
 
 ### Running benchmark scripts
 
