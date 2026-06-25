@@ -464,10 +464,10 @@ docker build -t faster-whisper-api:local -f docker/Dockerfile .
 ghcr.io/${{ github.repository }}
 ```
 
-For any fork, replace `your-github-owner` with the lowercased GitHub username or organization that owns the repository:
+For any fork, replace `YOUR_GITHUB_OWNER` with the lowercase GitHub username or organization that owns the repository:
 
 ```text
-ghcr.io/your-github-owner/faster-whisper:latest
+ghcr.io/YOUR_GITHUB_OWNER/faster-whisper:latest
 ```
 
 Published tags include:
@@ -486,8 +486,8 @@ version: "3.9"
 
 services:
   faster-whisper-api:
-    # Replace your-github-owner with the lowercased GitHub username or organization.
-    image: ghcr.io/your-github-owner/faster-whisper:latest
+    # Replace YOUR_GITHUB_OWNER with the lowercase GitHub username or organization.
+    image: ghcr.io/YOUR_GITHUB_OWNER/faster-whisper:latest
     container_name: faster-whisper-api
     restart: unless-stopped
     ports:
