@@ -1,11 +1,13 @@
 import logging
 import os
+import secrets
 import tempfile
 
 from functools import lru_cache
 from typing import List, Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from faster_whisper import WhisperModel
 
@@ -16,6 +18,7 @@ DEVICE = os.getenv("DEVICE", "cuda")
 COMPUTE_TYPE = os.getenv("COMPUTE_TYPE", "float16")
 BEAM_SIZE = int(os.getenv("BEAM_SIZE", "5"))
 DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE") or None
+API_KEY = os.getenv("API_KEY") or None
 ENABLE_VAD_FILTER = os.getenv("ENABLE_VAD_FILTER", "true").lower() in {
     "1",
     "true",
@@ -24,6 +27,7 @@ ENABLE_VAD_FILTER = os.getenv("ENABLE_VAD_FILTER", "true").lower() in {
 }
 
 app = FastAPI(title="faster-whisper OpenAI-compatible API")
+auth_scheme = HTTPBearer(auto_error=False)
 
 
 @lru_cache(maxsize=1)
@@ -37,12 +41,28 @@ def get_model() -> WhisperModel:
     return WhisperModel(MODEL_SIZE, device=DEVICE, compute_type=COMPUTE_TYPE)
 
 
+def require_api_key(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(auth_scheme),
+) -> None:
+    if API_KEY is None:
+        return
+
+    if credentials is None or not secrets.compare_digest(
+        credentials.credentials, API_KEY
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API key",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
 @app.get("/healthz")
 def healthcheck() -> dict:
     return {"status": "ok"}
 
 
-@app.post("/v1/audio/transcriptions")
+@app.post("/v1/audio/transcriptions", dependencies=[Depends(require_api_key)])
 async def create_transcription(
     file: UploadFile = File(...),
     model: str = Form("whisper-1"),

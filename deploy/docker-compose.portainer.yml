@@ -14,6 +14,7 @@ services:
       BEAM_SIZE: "5"
       ENABLE_VAD_FILTER: "true"
       DEFAULT_LANGUAGE: ""
+      API_KEY: ""
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
       interval: 30s

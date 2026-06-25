@@ -89,6 +89,7 @@ docker run --rm -it \
   -e COMPUTE_TYPE=float16 \
   -e BEAM_SIZE=5 \
   -e ENABLE_VAD_FILTER=true \
+  -e API_KEY= \
   faster-whisper:local
 ```
 
@@ -97,10 +98,25 @@ docker run --rm -it \
 - `POST /v1/audio/transcriptions` (OpenAI-compatible form upload)
 - `GET /healthz`
 
-Example request:
+Authentication is disabled by default. To require OpenAI-compatible bearer token
+authentication for transcription requests, set `API_KEY` to a non-empty value and
+send it as `Authorization: Bearer <API_KEY>`. The `/healthz` endpoint always
+remains unauthenticated for container health checks.
+
+Example request without authentication:
 
 ```bash
 curl -X POST "http://127.0.0.1:8000/v1/audio/transcriptions" \
+  -F "file=@sample.wav" \
+  -F "model=whisper-1" \
+  -F "response_format=json"
+```
+
+Example request with `API_KEY` enabled:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/v1/audio/transcriptions" \
+  -H "Authorization: Bearer $API_KEY" \
   -F "file=@sample.wav" \
   -F "model=whisper-1" \
   -F "response_format=json"
@@ -129,6 +145,7 @@ services:
       BEAM_SIZE: "5"
       ENABLE_VAD_FILTER: "true"
       DEFAULT_LANGUAGE: ""
+      API_KEY: ""
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
       interval: 30s
@@ -153,6 +170,9 @@ Notes:
 - The compose file uses GHCR images produced by GitHub Actions.
 - The cache volume avoids repeated model downloads.
 - In vanilla Docker Compose environments, `deploy.*` may be ignored; in Portainer/Swarm it is used for GPU reservations.
+- Leave `API_KEY` empty to keep the API unauthenticated, or set it to require
+  `Authorization: Bearer <API_KEY>` on transcription requests. `/healthz` does
+  not require authentication.
 
 ## Open WebUI integration
 
