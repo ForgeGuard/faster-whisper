@@ -27,7 +27,7 @@ This fork keeps the upstream Python package behavior and adds a containerized, O
 
 ## What this fork adds
 
-This branch differs from upstream [`SYSTRAN/faster-whisper`](https://github.com/SYSTRAN/faster-whisper) by adding deployment assets around the existing library:
+This fork differs from upstream [`SYSTRAN/faster-whisper`](https://github.com/SYSTRAN/faster-whisper) by adding deployment assets around the existing library:
 
 | Area | Files | Summary |
 | --- | --- | --- |
@@ -423,7 +423,7 @@ Environment variables are read at process startup:
 }
 ```
 
-`response_format=text` returns:
+`response_format=text` still returns a JSON object from this FastAPI implementation:
 
 ```json
 {"text": "Hello world."}
@@ -486,6 +486,7 @@ version: "3.9"
 
 services:
   faster-whisper-api:
+    # Replace <owner-or-org> with the lowercased GitHub owner or organization.
     image: ghcr.io/<owner-or-org>/faster-whisper:latest
     container_name: faster-whisper-api
     restart: unless-stopped
@@ -624,7 +625,7 @@ ct2-transformers-converter \
 ```
 
 - `--model` accepts a Hugging Face model name or local model directory.
-- `--copy_files tokenizer.json preprocessor_config.json` copies tokenizer and preprocessing metadata into the converted model directory.
+- `--copy_files tokenizer.json preprocessor_config.json` copies both tokenizer and preprocessing metadata into the converted model directory.
 - If tokenizer files are not copied, the tokenizer configuration is downloaded when the model is loaded later.
 - See the [CTranslate2 conversion API](https://opennmt.net/CTranslate2/python/ctranslate2.converters.TransformersConverter.html) for programmatic conversion.
 
