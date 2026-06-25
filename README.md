@@ -402,6 +402,11 @@ Environment variables are read at process startup:
 | `temperature` | `0.0` | accepted, currently ignored | Present for OpenAI client compatibility. |
 | `timestamp_granularities` | unset | partially supported | `word` enables word timestamp computation internally, but the current API response includes segment timings only. Use the Python API for word arrays. |
 
+Known compatibility limitations:
+
+- `response_format=text` does not return `text/plain`; it returns `{\"text\": \"...\"}` as JSON.
+- `timestamp_granularities[]=word` does not expose word arrays in the HTTP response. Use the Python API when word-level timestamp objects are required.
+
 ### Response examples
 
 `response_format=json` and `response_format=verbose_json` return JSON like:
@@ -464,10 +469,10 @@ docker build -t faster-whisper-api:local -f docker/Dockerfile .
 ghcr.io/${{ github.repository }}
 ```
 
-For any fork, replace `YOUR_GITHUB_OWNER` with the lowercase GitHub username or organization that owns the repository, and update the repository segment too if your fork is renamed. For example, if the GitHub repository is `myorg/faster-whisper`, use `ghcr.io/myorg/faster-whisper:latest`.
+For any fork, replace both placeholders with the lowercase GitHub repository owner and repository name. For example, if the GitHub repository is `myorg/faster-whisper`, use `ghcr.io/myorg/faster-whisper:latest`.
 
 ```text
-ghcr.io/YOUR_GITHUB_OWNER/faster-whisper:latest
+ghcr.io/YOUR_GITHUB_OWNER/YOUR_REPOSITORY_NAME:latest
 ```
 
 Published tags include:
@@ -486,8 +491,8 @@ version: "3.9"
 
 services:
   faster-whisper-api:
-    # Replace YOUR_GITHUB_OWNER with the lowercase GitHub username or organization.
-    image: ghcr.io/YOUR_GITHUB_OWNER/faster-whisper:latest
+    # Replace placeholders with the lowercase GitHub owner and repository name.
+    image: ghcr.io/YOUR_GITHUB_OWNER/YOUR_REPOSITORY_NAME:latest
     container_name: faster-whisper-api
     restart: unless-stopped
     ports:
