@@ -1,7 +1,7 @@
 [![CI](https://github.com/SYSTRAN/faster-whisper/workflows/CI/badge.svg)](https://github.com/SYSTRAN/faster-whisper/actions?query=workflow%3ACI)
 [![PyPI version](https://badge.fury.io/py/faster-whisper.svg)](https://badge.fury.io/py/faster-whisper)
 
-# Faster Whisper transcription with CTranslate2
+# Faster Whisper Server
 
 **faster-whisper** is a fast, memory-efficient reimplementation of OpenAI's Whisper speech-to-text models using [CTranslate2](https://github.com/OpenNMT/CTranslate2/), an optimized inference engine for Transformer models.
 
