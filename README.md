@@ -464,7 +464,7 @@ docker build -t faster-whisper-api:local -f docker/Dockerfile .
 ghcr.io/${{ github.repository }}
 ```
 
-For any fork, replace `YOUR_GITHUB_OWNER` with the lowercase GitHub username or organization that owns the repository. For example, if the repository owner is `myorg`, use `ghcr.io/myorg/faster-whisper:latest`.
+For any fork, replace `YOUR_GITHUB_OWNER` with the lowercase GitHub username or organization that owns the repository, and update the repository segment too if your fork is renamed. For example, if the GitHub repository is `myorg/faster-whisper`, use `ghcr.io/myorg/faster-whisper:latest`.
 
 ```text
 ghcr.io/YOUR_GITHUB_OWNER/faster-whisper:latest
