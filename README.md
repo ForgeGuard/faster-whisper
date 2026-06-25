@@ -464,10 +464,10 @@ docker build -t faster-whisper-api:local -f docker/Dockerfile .
 ghcr.io/${{ github.repository }}
 ```
 
-For this fork, that resolves to the repository's GHCR package, typically lowercased by Docker tooling, such as:
+For any fork, replace `<owner-or-org>` with the lowercased GitHub account that owns the repository:
 
 ```text
-ghcr.io/forgeguard/faster-whisper:latest
+ghcr.io/<owner-or-org>/faster-whisper:latest
 ```
 
 Published tags include:
@@ -486,7 +486,7 @@ version: "3.9"
 
 services:
   faster-whisper-api:
-    image: ghcr.io/forgeguard/faster-whisper:latest
+    image: ghcr.io/<owner-or-org>/faster-whisper:latest
     container_name: faster-whisper-api
     restart: unless-stopped
     ports:
